@@ -9,7 +9,7 @@ with NO modifications to logic, formulas, column names, or behavior.
 """
 
 # ---------------------------------------------------------
-# 1. Load raw data (exact same as notebook)
+# 1. Load raw data 
 # ---------------------------------------------------------
 macro_finance_data = pd.read_excel(r"raw_US_macro_finance_fixed.xlsx", index_col=0)
 w5000 = pd.read_excel("raw_w5000.xlsx", index_col=0)
@@ -36,7 +36,7 @@ market_data = macro_with_wilshire.join(nasdaq_close, how="outer")
 # Forward-fill NASDAQ values
 market_data.loc[:, "nasdaq_close"] = market_data["nasdaq_close"].ffill()
 
-# Remove temporary WILSHIRE5000 column (same as notebook)
+# Remove temporary WILSHIRE5000 column 
 market_data = market_data.drop(columns=["WILSHIRE5000"])
 
 # ---------------------------------------------------------
