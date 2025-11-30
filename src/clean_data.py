@@ -1,96 +1,57 @@
-"""
-clean_data.py
--------------
-Merge all macroeconomic indicators and NASDAQ index into a single dataset.
-Save cleaned dataset into data/processed/.
-"""
-
-import os
 import pandas as pd
-from utils.helpers import ensure_directories, save_dataframe, log
+import numpy as np
+from datetime import datetime, timedelta
 
+"""
+Clean and merge macro-finance data, Wilshire 5000, and NASDAQ data.
+This script directly converts your Jupyter Notebook logic into a .py file
+with NO modifications to logic, formulas, column names, or behavior.
+"""
 
-RAW_FILES = {
-    "GDP": "GDP.csv",
-    "CPI": "CPI.csv",
-    "UNRATE": "UNRATE.csv",
-    "FEDFUNDS": "FEDFUNDS.csv",
-    "INDPRO": "INDPRO.csv",
-    "RSAFS": "RSAFS.csv",
-    "HOUST": "HOUST.csv",
-    "DGS3MO": "DGS3MO.csv",
-    "DGS10": "DGS10.csv",
-    "T10Y2Y": "T10Y2Y.csv",
-    "VIX": "VIX.csv",
-    "NASDAQ": "NASDAQ.csv"
-}
+# ---------------------------------------------------------
+# 1. Load raw data (exact same as notebook)
+# ---------------------------------------------------------
+macro_finance_data = pd.read_excel(r"raw_US_macro_finance_fixed.xlsx", index_col=0)
+w5000 = pd.read_excel("raw_w5000.xlsx", index_col=0)
+nasdaq_close = pd.read_excel("raw_nasdaq_close.xlsx", index_col=0)
 
+# ---------------------------------------------------------
+# 2. Merge macro-finance with Wilshire 5000
+# ---------------------------------------------------------
+macro_with_wilshire = macro_finance_data.join(w5000, how="outer")
 
+# Forward-fill missing WILSHIRE5000 values
+macro_with_wilshire["WILSHIRE5000"] = macro_with_wilshire["WILSHIRE5000"].ffill()
 
-def load_csv(path):
-    """Utility to load a CSV cleanly and standardize the Date column."""
-    df = pd.read_csv(path)
+# Compute the Buffett Indicator
+macro_with_wilshire["BUFFETT_INDICATOR"] = (
+    macro_with_wilshire["WILSHIRE5000"] / macro_with_wilshire["GDP"]
+)
 
-    # Normalize column names: date -> Date, value -> Value, etc.
-    df.columns = [col.capitalize() for col in df.columns]
+# ---------------------------------------------------------
+# 3. Merge NASDAQ close
+# ---------------------------------------------------------
+market_data = macro_with_wilshire.join(nasdaq_close, how="outer")
 
-    # 统一把 Date 解析成 datetime，并去掉时区信息
-    # utc=True 可以处理带时区的字符串，tz_localize(None) 去掉时区，只保留日期时间
-    df["Date"] = pd.to_datetime(df["Date"], utc=True, errors="coerce")
-    df["Date"] = df["Date"].dt.tz_localize(None)
+# Forward-fill NASDAQ values
+market_data.loc[:, "nasdaq_close"] = market_data["nasdaq_close"].ffill()
 
-    return df
+# Remove temporary WILSHIRE5000 column (same as notebook)
+market_data = market_data.drop(columns=["WILSHIRE5000"])
 
+# ---------------------------------------------------------
+# 4. Keep only features with values after 2025-01-01
+# ---------------------------------------------------------
+df_after = market_data.loc["2025-01-01":]
+valid_columns = df_after.notna().any(axis=0)
+features_with_values = valid_columns[valid_columns].index.tolist()
 
+market_data_processed = market_data.loc[:, features_with_values]
 
-def main():
-    log("Starting data cleaning & merging ...")
+# ---------------------------------------------------------
+# 5. Save processed data
+# ---------------------------------------------------------
+market_data_processed.to_excel(r"processed market data.xlsx")
 
-    raw_dir, processed_dir = ensure_directories()
+print("Saved: processed market data.xlsx")
 
-    merged_df = None
-
-    # ----------------------------
-    # Merge all macroeconomic data
-    # ----------------------------
-    for name, filename in RAW_FILES.items():
-        file_path = os.path.join(raw_dir, filename)
-
-        if not os.path.exists(file_path):
-            log(f"[WARNING] Missing raw file: {filename}, skipping.")
-            continue
-
-        log(f"Loading {filename} ...")
-        df = load_csv(file_path)
-
-        if merged_df is None:
-            merged_df = df.rename(columns={"Value": name})
-        else:
-            merged_df = merged_df.merge(
-                df.rename(columns={"Value": name}),
-                on="Date",
-                how="outer"
-            )
-
-    # ----------------------------
-    # Sort by date
-    # ----------------------------
-    merged_df = merged_df.sort_values("Date")
-
-    # ----------------------------
-    # Fill missing values (forward-fill then back-fill)
-    # ----------------------------
-    merged_df = merged_df.ffill().bfill()
-
-    # ----------------------------
-    # Save final cleaned dataset
-    # ----------------------------
-    save_path = os.path.join(processed_dir, "merged_data.csv")
-    save_dataframe(merged_df, save_path)
-
-    log("Cleaned dataset created!")
-    log(f"Saved to: {save_path}")
-
-
-if __name__ == "__main__":
-    main()
