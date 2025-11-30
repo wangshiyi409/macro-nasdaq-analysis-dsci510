@@ -26,12 +26,21 @@ RAW_FILES = {
 }
 
 
+
 def load_csv(path):
-    """Utility to load a CSV cleanly."""
+    """Utility to load a CSV cleanly and standardize the Date column."""
     df = pd.read_csv(path)
-    df.columns = [col.capitalize() for col in df.columns]  # Normalize column names
-    df["Date"] = pd.to_datetime(df["Date"])
+
+    # Normalize column names: date -> Date, value -> Value, etc.
+    df.columns = [col.capitalize() for col in df.columns]
+
+    # 统一把 Date 解析成 datetime，并去掉时区信息
+    # utc=True 可以处理带时区的字符串，tz_localize(None) 去掉时区，只保留日期时间
+    df["Date"] = pd.to_datetime(df["Date"], utc=True, errors="coerce")
+    df["Date"] = df["Date"].dt.tz_localize(None)
+
     return df
+
 
 
 def main():
