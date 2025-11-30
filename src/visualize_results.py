@@ -1,13 +1,14 @@
 """
 visualize_results.py
 --------------------
-Create visualizations:
-- Macro indicators + NASDAQ time series
-- Correlation heatmap
-- ROC curve
-- Confusion matrix
+Create all visualizations used in the final project:
 
-All figures are saved into /results/.
+1. Correlation heatmap (from processed macro correlation coefficient)
+2. Macro indicators vs NASDAQ (4x2 subplot)
+3. ROC curve (loaded from Excel)
+4. Confusion Matrix (loaded from Excel)
+
+All generated images will be saved in the /results/ folder.
 """
 
 import os
@@ -16,106 +17,182 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from utils.helpers import get_project_root, log
-
-
-def plot_macro_timeseries(df, save_path):
-    """
-    Plot NASDAQ and one or two macro indicators over time.
-    """
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-
-    # 主轴：NASDAQ
-    ax1.plot(df["Date"], df["NASDAQ"], label="NASDAQ", linewidth=1.2)
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("NASDAQ Index Level")
-    ax1.tick_params(axis="y")
-
-    # 次轴：选 GDP（可以换成其他宏观指标）
-    ax2 = ax1.twinx()
-    ax2.plot(df["Date"], df["GDP"], label="GDP", linestyle="--", alpha=0.7)
-    ax2.set_ylabel("GDP (Level or Scaled)")
-
-    # 合并图例
-    lines, labels = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines + lines2, labels + labels2, loc="upper left")
-
-    plt.title("NASDAQ vs GDP Over Time")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-    log(f"[Saved] {save_path}")
-
-
-def plot_correlation_heatmap(corr_df, save_path):
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr_df, annot=True, fmt=".2f", cmap="coolwarm", square=True)
-    plt.title("Correlation Heatmap: NASDAQ and Macro Indicators")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-    log(f"[Saved] {save_path}")
-
-
-def plot_roc_curve(roc_df, metrics_df, save_path):
-    plt.figure(figsize=(6, 6))
-    plt.plot(roc_df["fpr"], roc_df["tpr"], label=f"ROC curve (AUC = {metrics_df['roc_auc'][0]:.3f})")
-    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Random Guess")
-
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("ROC Curve for Tail-Risk Prediction")
-    plt.legend(loc="lower right")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-    log(f"[Saved] {save_path}")
-
-
-def plot_confusion_matrix(cm_df, save_path):
-    plt.figure(figsize=(5, 4))
-    sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues")
-    plt.title("Confusion Matrix (Threshold = 0.5)")
-    plt.ylabel("Actual")
-    plt.xlabel("Predicted")
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
-    log(f"[Saved] {save_path}")
-
 
 def main():
-    log("Starting visualization pipeline...")
 
-    root = get_project_root()
-    results_dir = os.path.join(root, "results")
+    # ============================================================
+    # 0. Prepare paths
+    # ============================================================
+    results_dir = os.path.join("results")
     os.makedirs(results_dir, exist_ok=True)
 
-    # 1. 加载 analysis_dataset，用于时间序列图
-    analysis_path = os.path.join(results_dir, "analysis_dataset.csv")
-    df = pd.read_csv(analysis_path)
-    df["Date"] = pd.to_datetime(df["Date"])
+    # ============================================================
+    # 1. Load Data
+    # ============================================================
+    df_raw = pd.read_excel("data/processed/processed macro correlation coefficient.xlsx", index_col=0)
+    market_data = pd.read_excel("data/processed/processed market data.xlsx", index_col=0)
 
-    # 2. 时间序列图：NASDAQ + GDP
-    plot_macro_timeseries(df, os.path.join(results_dir, "macro_timeseries.png"))
+    # The strong macro indicators you manually selected
+    market_data_strong = market_data.loc[:, [
+        'BUFFETT_INDICATOR', 'RSAFS', 'GDP', 'CPIAUCSL',
+        'HOUST', 'DGS3MO', 'FEDFUNDS', 'nasdaq_close'
+    ]]
 
-    # 3. 相关性热力图
-    corr_path = os.path.join(results_dir, "correlation_matrix.csv")
-    corr_df = pd.read_csv(corr_path, index_col=0)
-    plot_correlation_heatmap(corr_df, os.path.join(results_dir, "correlation_heatmap.png"))
+    # ============================================================
+    # 2. Correlation Heatmap
+    # ============================================================
+    df_corr = df_raw.set_index("Indicator").T
 
-    # 4. ROC 曲线
-    roc_df = pd.read_csv(os.path.join(results_dir, "roc_curve_data.csv"))
-    metrics_df = pd.read_csv(os.path.join(results_dir, "metrics.csv"))
-    plot_roc_curve(roc_df, metrics_df, os.path.join(results_dir, "roc_curve.png"))
+    plt.figure(figsize=(14, 3))
+    sns.heatmap(
+        df_corr,
+        annot=True,
+        fmt=".3f",
+        cmap="coolwarm",
+        center=0,
+        vmin=-1,
+        vmax=1,
+        cbar_kws={'label': 'Correlation / Value', 'shrink': 0.8},
+        linewidths=0.5,
+        linecolor="white"
+    )
 
-    # 5. 混淆矩阵
-    cm_df = pd.read_csv(os.path.join(results_dir, "confusion_matrix.csv"), index_col=0)
-    plot_confusion_matrix(cm_df, os.path.join(results_dir, "confusion_matrix.png"))
+    plt.title("Economic Indicators Correlation Heatmap", fontsize=16, pad=25)
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
 
-    log("All visualizations created in /results/.")
+    heatmap_path = os.path.join(results_dir, "heatmap_correlation.png")
+    plt.savefig(heatmap_path, dpi=300)
+    print(f"[Saved] {heatmap_path}")
+    plt.close()
+
+    # ============================================================
+    # 3. Statistics printout
+    # ============================================================
+    print("Data Statistics:")
+    print(f"Range: {min(df_raw['Value']):.3f} → {max(df_raw['Value']):.3f}")
+    print(f"Mean: {np.mean(df_raw['Value']):.3f}")
+    print(f"Positive count: {sum(x > 0 for x in df_raw['Value'])}")
+    print(f"Negative count: {sum(x < 0 for x in df_raw['Value'])}")
+
+    # ============================================================
+    # 4. Macro Indicators vs NASDAQ (4x2 subplot)
+    # ============================================================
+    df_plot = market_data_strong.dropna(how="all")
+    features = [
+        'BUFFETT_INDICATOR', 'RSAFS', 'GDP', 'CPIAUCSL',
+        'HOUST', 'DGS3MO', 'FEDFUNDS'
+    ]
+
+    sns.set_style("whitegrid")
+
+    color_main = sns.color_palette("Blues", 5)[3]
+    color_ref = sns.color_palette("Reds", 5)[3]
+
+    plt.rcParams['axes.edgecolor'] = '#aaaaaa'
+    plt.rcParams['axes.linewidth'] = 0.7
+    plt.rcParams['font.size'] = 10
+
+    fig, axes = plt.subplots(4, 2, figsize=(17, 18))
+    axes = axes.flatten()
+
+    for ax, feature in zip(axes, features):
+
+        df_plot[feature].dropna().plot(
+            ax=ax,
+            label=feature,
+            color=color_main,
+            linewidth=2
+        )
+
+        ax2 = ax.twinx()
+        df_plot["nasdaq_close"].dropna().plot(
+            ax=ax2,
+            label="NASDAQ",
+            color=color_ref,
+            alpha=0.65,
+            linewidth=2
+        )
+
+        ax.set_title(f"{feature} vs NASDAQ Composite", fontsize=13, fontweight="bold", pad=8)
+        ax.legend(loc="upper left", fontsize=9, frameon=False)
+        ax2.legend(loc="upper right", fontsize=9, frameon=False)
+
+        ax.grid(axis='x', linestyle="--", linewidth=0.6, alpha=0.5)
+        ax2.grid(axis='y', linestyle="--", linewidth=0.6, alpha=0.4)
+
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax2.set_ylabel("")
+
+        for spine in ax.spines.values():
+            spine.set_alpha(0.3)
+
+    # Hide empty subplots
+    for ax in axes[len(features):]:
+        ax.set_visible(False)
+
+    fig.suptitle(
+        "Macro Indicators vs NASDAQ Composite Index",
+        fontsize=18,
+        fontweight="bold",
+        y=1.02
+    )
+
+    plt.tight_layout()
+
+    macro_plot_path = os.path.join(results_dir, "macro_indicators_vs_nasdaq.png")
+    plt.savefig(macro_plot_path, dpi=300, bbox_inches="tight")
+    print(f"[Saved] {macro_plot_path}")
+    plt.close()
+
+    # ============================================================
+    # 5. ROC Curve
+    # ============================================================
+    roc_df = pd.read_excel("data/processed/processed results_tail_risk.xlsx", sheet_name="ROC_Data")
+    auc_df = pd.read_excel("data/processed/processed results_tail_risk.xlsx", sheet_name="AUC")
+    auc_value = auc_df["AUC"].iloc[0]
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(roc_df["fpr"], roc_df["tpr"], label=f"ROC Curve (AUC = {auc_value:.3f})", linewidth=2)
+    plt.plot([0, 1], [0, 1], linestyle="--", color="gray", label="Random Guess")
+
+    plt.title("ROC Curve", fontsize=14, fontweight="bold")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.tight_layout()
+
+    roc_path = os.path.join(results_dir, "roc_curve.png")
+    plt.savefig(roc_path, dpi=300)
+    print(f"[Saved] {roc_path}")
+    plt.close()
+
+    # ============================================================
+    # 6. Confusion Matrix
+    # ============================================================
+    cm_df = pd.read_excel("data/processed/processed results_tail_risk.xlsx", sheet_name="Confusion_Matrix", index_col=0)
+
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues")
+
+    plt.title("Confusion Matrix", fontsize=14, fontweight="bold")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.tight_layout()
+
+    confusion_path = os.path.join(results_dir, "confusion_matrix.png")
+    plt.savefig(confusion_path, dpi=300)
+    print(f"[Saved] {confusion_path}")
+    plt.close()
+
+    # ============================================================
+    # Done
+    # ============================================================
+    print("All visualizations saved in /results/")
 
 
 if __name__ == "__main__":
     main()
+

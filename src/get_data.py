@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 import yfinance as yf
 from datetime import datetime, timedelta
 import warnings
+import os
 warnings.filterwarnings('ignore')
 
 
@@ -19,8 +20,6 @@ class FREDDataCollector:
     def get_series_data(self, series_id: str) -> pd.DataFrame:
         """
         Fetch a time series from FRED API starting from 2014-12-31.
-        Returns:
-            A pandas DataFrame indexed by date with the series values.
         """
         url = f"{self.base_url}/series/observations"
         params = {
@@ -43,9 +42,8 @@ class FREDDataCollector:
             return None
 
 
-# ===== Corrected FRED Series List (same as your notebook) =====
+# ===== Your original FRED series list =====
 FRED_SERIES = {
-    # Macro
     "GDP": "GDP",
     "CPI": "CPIAUCSL",
     "UNRATE": "UNRATE",
@@ -53,24 +51,18 @@ FRED_SERIES = {
     "INDUSTRIAL_PRODUCTION": "INDPRO",
     "RETAIL_SALES": "RSAFS",
     "HOUSING_STARTS": "HOUST",
-
-    # Yield curve
     "DGS3MO": "DGS3MO",
-
-    # VIX
     "VIX": "VIXCLS",
-
-    # Liquidity / financial stress proxies
     "STLFSI": "STLFSI",
     "TEDRATE": "TEDRATE",
 }
 
 
 def main():
-    """
-    Main pipeline for fetching macro-finance data (FRED + Yahoo Finance)
-    and saving all raw datasets to Excel files.
-    """
+    # Ensure raw folder exists
+    raw_dir = os.path.join("data", "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+
     print("===== Fetching macro-financial data from FRED API =====")
     api_key = "dca474e4ebb8d4b9092e387e067c07cc"
     collector = FREDDataCollector(api_key)
@@ -85,30 +77,33 @@ def main():
             print(f"Skipping {series_id} due to fetch error.")
 
     macro_finance_data = pd.concat(dfs, axis=1)
-    macro_finance_data.to_excel("raw_US_macro_finance_fixed.xlsx")
-    print("[Saved] raw_US_macro_finance_fixed.xlsx")
+    macro_output = os.path.join(raw_dir, "raw_US_macro_finance_fixed.xlsx")
+    macro_finance_data.to_excel(macro_output)
+    print(f"[Saved] {macro_output}")
 
-    # ===== Fetch Wilshire 5000 (^W5000) =====
+    # Fetch Wilshire 5000 (^W5000)
     print("===== Fetching WILSHIRE 5000 index (^W5000) =====")
     w5000 = yf.download("^W5000", start="2014-12-31")
     w5000.columns = ["Close", "High", "Low", "Open", "Volume"]
     w5000 = w5000[["Close"]].rename(columns={"Close": "WILSHIRE5000"})
     w5000.index = pd.to_datetime(w5000.index)
-    w5000.to_excel("raw_w5000.xlsx")
-    print("[Saved] raw_w5000.xlsx")
+    w5000_output = os.path.join(raw_dir, "raw_w5000.xlsx")
+    w5000.to_excel(w5000_output)
+    print(f"[Saved] {w5000_output}")
 
-    # ===== Fetch NASDAQ (^IXIC) daily close =====
+    # Fetch NASDAQ (^IXIC)
     print("===== Fetching NASDAQ index (^IXIC) =====")
-    ticker = "^IXIC"
-
-    nasdaq = yf.download(ticker, start="2014-12-31", end=None)
+    nasdaq = yf.download("^IXIC", start="2014-12-31", end=None)
     nasdaq_close = nasdaq[["Close"]].rename(columns={"Close": "nasdaq_close"})
     nasdaq_close.index = pd.to_datetime(nasdaq_close.index)
-    nasdaq_close.to_excel("raw_nasdaq_close.xlsx")
-    print("[Saved] raw_nasdaq_close.xlsx")
+    nasdaq_output = os.path.join(raw_dir, "raw_nasdaq_close.xlsx")
+    nasdaq_close.to_excel(nasdaq_output)
+    print(f"[Saved] {nasdaq_output}")
 
     print("===== All raw datasets downloaded successfully =====")
 
 
 if __name__ == "__main__":
     main()
+
+
