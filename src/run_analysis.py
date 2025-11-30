@@ -35,7 +35,7 @@ def main():
     # ----------------------------
     log("Loading merged_data.csv ...")
     df = pd.read_csv(processed_path)
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
     # 把 Close 列重命名成 NASDAQ，方便解释
     if "Close" in df.columns:
